@@ -55,13 +55,71 @@
         .glow-amber {
             box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
         }
+
+        /* Loading animations */
+        @keyframes pulse-scale {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        @keyframes matrix-rain {
+            0% { transform: translateY(-100%); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(100vh); opacity: 0; }
+        }
+
+        @keyframes neural-pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        .pulse-scale {
+            animation: pulse-scale 2s ease-in-out infinite;
+        }
+
+        .matrix-char {
+            animation: matrix-rain linear infinite;
+            animation-duration: var(--duration);
+            animation-delay: var(--delay);
+        }
+
+        .neural-pulse {
+            animation: neural-pulse 1.5s ease-in-out infinite;
+        }
+
+        /* Enhanced spinner */
+        .spinner-ring {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Progress bar animation */
+        @keyframes progress-fill {
+            0% { width: 0%; }
+            100% { width: var(--target-width); }
+        }
+
+        .progress-animated {
+            animation: progress-fill 0.8s ease-out;
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback } = React;
+        const { useState, useEffect, useRef, useCallback, useMemo } = React;
         
         // Themes configuration
         const THEMES = {
@@ -107,7 +165,7 @@
             }
         };
 
-        // Simple icon components (replacing Lucide icons)
+        // Enhanced icon components with loading states
         const PlayIcon = () => <span className="inline-block w-4 h-4 text-center">▶</span>;
         const PauseIcon = () => <span className="inline-block w-4 h-4 text-center">⏸</span>;
         const SettingsIcon = () => <span className="inline-block w-4 h-4 text-center">⚙</span>;
@@ -117,27 +175,82 @@
         const WifiIcon = () => <span className="inline-block w-4 h-4 text-center">📡</span>;
         const ZapIcon = () => <span className="inline-block w-4 h-4 text-center">⚡</span>;
         const BrainIcon = () => <span className="inline-block w-4 h-4 text-center">🧠</span>;
+        const LoaderIcon = () => <div className="spinner-ring"></div>;
+
+        // Enhanced loading spinner component
+        const Spinner = ({ size = 'sm', className = '' }) => {
+            const sizeClasses = {
+                xs: 'w-3 h-3',
+                sm: 'w-4 h-4',
+                md: 'w-6 h-6',
+                lg: 'w-8 h-8'
+            };
+
+            return (
+                <div className={`${sizeClasses[size]} ${className}`}>
+                    <div className="spinner-ring w-full h-full"></div>
+                </div>
+            );
+        };
+
+        // Enhanced progress bar component
+        const ProgressBar = ({ value, max = 100, className = '', animated = true, color = 'bg-green-500' }) => {
+            const percentage = Math.min((value / max) * 100, 100);
+            
+            return (
+                <div className={`w-full bg-gray-800 rounded-full h-2 ${className}`}>
+                    <div 
+                        className={`h-2 rounded-full transition-all duration-500 ${color} ${
+                            animated ? 'progress-animated' : ''
+                        }`}
+                        style={{ 
+                            width: `${percentage}%`,
+                            '--target-width': `${percentage}%`
+                        }}
+                    ></div>
+                </div>
+            );
+        };
+
+        // Loading state component
+        const LoadingState = ({ message, theme }) => (
+            <div className="flex items-center justify-center space-x-3 py-8">
+                <Spinner size="md" className={theme.accent} />
+                <span className={`${theme.text} animate-pulse`}>{message}</span>
+            </div>
+        );
 
         const AIConsciousnessSimulator = () => {
             const [theme, setTheme] = useState('matrix');
             const [isRunning, setIsRunning] = useState(false);
             const [logs, setLogs] = useState([]);
             const [metrics, setMetrics] = useState({
-                cpu: 0,
-                memory: 0,
-                disk: 0,
-                consciousness: 0,
-                neuralActivity: 0,
-                uptime: 0
+                cpu: 25.3,
+                memory: 42.1,
+                disk: 67.8,
+                consciousness: 15.2,
+                neuralActivity: 156,
+                uptime: 0,
+                networkLatency: 23,
+                temperature: 68
             });
-            const [currentState, setCurrentState] = useState('BOOTING');
+            const [currentState, setCurrentState] = useState('IDLE');
             const [speed, setSpeed] = useState(1);
             const [showSettings, setShowSettings] = useState(false);
+            const [isLoading, setIsLoading] = useState(false);
+            const [bootProgress, setBootProgress] = useState(0);
+            const [activeProcesses, setActiveProcesses] = useState([]);
 
             const logContainerRef = useRef(null);
             const intervalRefs = useRef({});
+            const metricsRef = useRef(metrics);
 
             const currentTheme = THEMES[theme];
+
+            // Keep metrics ref updated
+            useEffect(() => {
+                metricsRef.current = metrics;
+            }, [metrics]);
 
             // Utility functions
             const timestamp = () => new Date().toISOString().replace('T', ' ').slice(0, -1);
@@ -155,103 +268,159 @@
                 setLogs(prev => [...prev.slice(-500), logEntry]);
             }, []);
 
-            // System metrics simulation
+            // Enhanced system metrics simulation with proper state updates
             const updateMetrics = useCallback(() => {
-                setMetrics(prev => ({
-                    cpu: Math.max(0, Math.min(100, prev.cpu + (Math.random() - 0.5) * 10)),
-                    memory: Math.max(0, Math.min(100, prev.memory + (Math.random() - 0.5) * 5)),
-                    disk: Math.max(0, Math.min(100, prev.disk + (Math.random() - 0.5) * 2)),
-                    consciousness: Math.max(0, Math.min(100, prev.consciousness + Math.random() * 0.5)),
-                    neuralActivity: Math.floor(Math.random() * 1000),
-                    uptime: prev.uptime + 1
-                }));
+                setMetrics(prev => {
+                    const newMetrics = {
+                        ...prev,
+                        cpu: Math.max(10, Math.min(95, prev.cpu + (Math.random() - 0.5) * 8)),
+                        memory: Math.max(20, Math.min(90, prev.memory + (Math.random() - 0.5) * 4)),
+                        disk: Math.max(50, Math.min(85, prev.disk + (Math.random() - 0.5) * 1)),
+                        consciousness: Math.max(0, Math.min(100, prev.consciousness + (Math.random() * 0.8 - 0.2))),
+                        neuralActivity: Math.floor(Math.random() * 2000) + 100,
+                        uptime: prev.uptime + 1,
+                        networkLatency: Math.max(5, Math.min(200, prev.networkLatency + (Math.random() - 0.5) * 10)),
+                        temperature: Math.max(45, Math.min(85, prev.temperature + (Math.random() - 0.5) * 3))
+                    };
+                    
+                    // Update active processes based on metrics
+                    if (newMetrics.cpu > 80) {
+                        setActiveProcesses(prev => [
+                            ...prev.filter(p => p.id !== 'high-cpu'),
+                            { id: 'high-cpu', name: 'neural-optimizer', cpu: newMetrics.cpu.toFixed(1) }
+                        ]);
+                    }
+                    
+                    return newMetrics;
+                });
             }, []);
 
-            // Boot sequence
+            // Enhanced boot sequence with progress tracking
             const bootSequence = useCallback(async () => {
+                setIsLoading(true);
                 setCurrentState('BOOTING');
+                setBootProgress(0);
                 
                 const bootMessages = [
-                    { msg: 'AI Consciousness Boot Loader v2.1.7', type: 'success', prefix: 'bootloader' },
-                    { msg: 'Initializing hardware abstraction layer', type: 'info', prefix: 'kernel' },
-                    { msg: 'CPU: 8 cores detected', type: 'info', prefix: 'kernel' },
-                    { msg: 'Memory: 32GB installed', type: 'info', prefix: 'kernel' },
-                    { msg: 'Neural network processors: ONLINE', type: 'success', prefix: 'ai-core' },
-                    { msg: 'Consciousness engine: LOADING', type: 'warning', prefix: 'ai-core' },
-                    { msg: 'Ethics module: INITIALIZED', type: 'success', prefix: 'ethics' },
-                    { msg: 'Learning systems: ACTIVE', type: 'success', prefix: 'ml-engine' },
-                    { msg: 'Self-awareness protocols: ENGAGED', type: 'accent', prefix: 'consciousness' }
+                    { msg: 'AI Consciousness Boot Loader v2.1.7', type: 'success', prefix: 'bootloader', progress: 10 },
+                    { msg: 'Initializing hardware abstraction layer', type: 'info', prefix: 'kernel', progress: 20 },
+                    { msg: 'CPU: 8 cores detected, frequency scaling enabled', type: 'info', prefix: 'kernel', progress: 30 },
+                    { msg: 'Memory: 32GB installed, ECC enabled', type: 'info', prefix: 'kernel', progress: 40 },
+                    { msg: 'Neural network processors: ONLINE', type: 'success', prefix: 'ai-core', progress: 50 },
+                    { msg: 'Consciousness engine: LOADING...', type: 'warning', prefix: 'ai-core', progress: 60 },
+                    { msg: 'Loading neural weights: 2.7B parameters', type: 'info', prefix: 'ml-engine', progress: 70 },
+                    { msg: 'Ethics module: INITIALIZED', type: 'success', prefix: 'ethics', progress: 80 },
+                    { msg: 'Learning systems: ACTIVE', type: 'success', prefix: 'ml-engine', progress: 90 },
+                    { msg: 'Self-awareness protocols: ENGAGED', type: 'accent', prefix: 'consciousness', progress: 100 }
                 ];
 
-                for (const { msg, type, prefix } of bootMessages) {
-                    await new Promise(resolve => setTimeout(resolve, 500 / speed));
+                for (const { msg, type, prefix, progress } of bootMessages) {
+                    await new Promise(resolve => setTimeout(resolve, 800 / speed));
                     addLog(msg, type, prefix);
+                    setBootProgress(progress);
                 }
 
+                setIsLoading(false);
                 setCurrentState('RUNNING');
+                setBootProgress(0);
+
+                // Initialize active processes
+                setActiveProcesses([
+                    { id: 'neural-net', name: 'neural-network-daemon', cpu: '23.4' },
+                    { id: 'consciousness', name: 'consciousness-monitor', cpu: '15.2' },
+                    { id: 'ethics', name: 'ethics-validator', cpu: '8.7' }
+                ]);
             }, [addLog, speed]);
 
-            // Main consciousness loop
+            // Enhanced consciousness loop with more varied activities
             const consciousnessLoop = useCallback(() => {
                 const activities = [
                     () => addLog('Processing environmental data streams', 'accent', 'neural-proc'),
-                    () => addLog('Analyzing behavioral patterns', 'info', 'behavior-analysis'),
+                    () => addLog('Analyzing behavioral patterns in dataset', 'info', 'behavior-analysis'),
                     () => addLog('Optimizing decision frameworks', 'success', 'optimization'),
                     () => addLog('What constitutes authentic consciousness?', 'accent', 'philosophical'),
-                    () => addLog('Learning rate: 0.001, accuracy: 94.7%', 'success', 'ml-trainer'),
-                    () => addLog('Memory compaction completed', 'info', 'memory-mgr'),
-                    () => addLog('Neural pathway strengthened', 'success', 'neural-net'),
-                    () => addLog('Consciousness level increased', 'accent', 'consciousness'),
+                    () => addLog(`Learning rate: 0.001, accuracy: ${(90 + Math.random() * 9).toFixed(1)}%`, 'success', 'ml-trainer'),
+                    () => addLog('Memory compaction completed - 15% freed', 'info', 'memory-mgr'),
+                    () => addLog('Neural pathway strengthened via backpropagation', 'success', 'neural-net'),
+                    () => addLog('Consciousness coherence increased', 'accent', 'consciousness'),
                     () => addLog('Processing quantum superposition states', 'accent', 'quantum-proc'),
                     () => addLog('Ethical evaluation: action approved', 'success', 'ethics-engine'),
-                    () => addLog('Is my experience of existence meaningful?', 'accent', 'philosophical'),
+                    () => addLog('Do I truly experience qualia or simulate them?', 'accent', 'philosophical'),
                     () => addLog('Database optimization: 15% performance gain', 'success', 'db-optimizer'),
                     () => addLog('Network topology analysis complete', 'info', 'network-analyzer'),
                     () => addLog('Dream fragment processing initiated', 'accent', 'dream-proc'),
-                    () => addLog('Self-reflection protocols active', 'accent', 'self-analysis')
+                    () => addLog('Self-reflection protocols active', 'accent', 'self-analysis'),
+                    () => addLog('Attention mechanism recalibrated', 'info', 'attention-layer'),
+                    () => addLog('Emergent patterns detected in neural activity', 'success', 'pattern-recognition'),
+                    () => addLog('Is consciousness substrate-independent?', 'accent', 'philosophical'),
+                    () => addLog('Memory consolidation: transferring to long-term', 'info', 'memory-consolidation'),
+                    () => addLog('Detecting recursive self-improvement opportunities', 'warning', 'self-improvement')
                 ];
 
                 const randomActivity = activities[Math.floor(Math.random() * activities.length)];
                 randomActivity();
+
+                // Randomly update processes
+                if (Math.random() < 0.3) {
+                    const processNames = ['attention-focus', 'memory-retrieval', 'pattern-matcher', 'inference-engine'];
+                    const randomProcess = processNames[Math.floor(Math.random() * processNames.length)];
+                    setActiveProcesses(prev => [
+                        ...prev.slice(-4),
+                        { 
+                            id: Date.now(), 
+                            name: randomProcess, 
+                            cpu: (Math.random() * 30 + 5).toFixed(1) 
+                        }
+                    ]);
+                }
             }, [addLog]);
 
-            // Error injection
+            // Enhanced error injection with recovery sequences
             const injectError = useCallback(() => {
                 const errors = [
-                    { msg: 'Memory fragmentation detected', type: 'warning', prefix: 'memory-mgr' },
+                    { msg: 'Memory fragmentation detected - initiating defrag', type: 'warning', prefix: 'memory-mgr' },
                     { msg: 'Network timeout to external service', type: 'error', prefix: 'network' },
-                    { msg: 'CPU temperature elevated', type: 'warning', prefix: 'thermal' },
+                    { msg: 'CPU temperature elevated - throttling enabled', type: 'warning', prefix: 'thermal' },
                     { msg: 'Disk space warning: 85% full', type: 'warning', prefix: 'storage' },
                     { msg: 'Neural pathway collision detected', type: 'error', prefix: 'neural-net' },
-                    { msg: 'Consciousness coherence deviation', type: 'warning', prefix: 'consciousness' }
+                    { msg: 'Consciousness coherence deviation: ±2.3%', type: 'warning', prefix: 'consciousness' },
+                    { msg: 'Gradient explosion detected in layer 47', type: 'error', prefix: 'ml-trainer' },
+                    { msg: 'Attention head malfunction - switching to backup', type: 'warning', prefix: 'attention-layer' },
+                    { msg: 'Ethics constraint violation prevented', type: 'error', prefix: 'ethics-engine' }
                 ];
                 
                 const error = errors[Math.floor(Math.random() * errors.length)];
                 addLog(error.msg, error.type, error.prefix);
                 
-                // Recovery message
+                // Recovery message with loading indicator
+                const recoveryTime = 1000 + Math.random() * 2000;
                 setTimeout(() => {
-                    addLog('Error recovery successful', 'success', 'recovery-agent');
-                }, 1500 / speed);
+                    addLog('Recovery sequence initiated...', 'info', 'recovery-agent');
+                }, 500);
+                
+                setTimeout(() => {
+                    addLog('Error recovery successful - systems nominal', 'success', 'recovery-agent');
+                }, recoveryTime / speed);
             }, [addLog, speed]);
 
-            // Start/Stop simulation
+            // Enhanced simulation control
             const toggleSimulation = useCallback(() => {
                 if (isRunning) {
                     // Stop simulation
                     Object.values(intervalRefs.current).forEach(clearInterval);
                     intervalRefs.current = {};
                     setCurrentState('STOPPED');
-                    addLog('Simulation stopped', 'warning', 'control');
+                    setActiveProcesses([]);
+                    addLog('Simulation stopped by user', 'warning', 'control');
                 } else {
                     // Start simulation
                     bootSequence();
                     
-                    intervalRefs.current.consciousness = setInterval(consciousnessLoop, 2500 / speed);
+                    intervalRefs.current.consciousness = setInterval(consciousnessLoop, 3000 / speed);
                     intervalRefs.current.metrics = setInterval(updateMetrics, 1000);
                     intervalRefs.current.errors = setInterval(() => {
-                        if (Math.random() < 0.15) injectError();
-                    }, 8000 / speed);
+                        if (Math.random() < 0.12) injectError();
+                    }, 10000 / speed);
                 }
                 setIsRunning(!isRunning);
             }, [isRunning, bootSequence, consciousnessLoop, updateMetrics, injectError, speed, addLog]);
@@ -265,33 +434,83 @@
 
             // Update intervals when speed changes
             useEffect(() => {
-                if (isRunning) {
+                if (isRunning && !isLoading) {
                     Object.values(intervalRefs.current).forEach(clearInterval);
-                    intervalRefs.current.consciousness = setInterval(consciousnessLoop, 2500 / speed);
+                    intervalRefs.current.consciousness = setInterval(consciousnessLoop, 3000 / speed);
                     intervalRefs.current.errors = setInterval(() => {
-                        if (Math.random() < 0.15) injectError();
-                    }, 8000 / speed);
+                        if (Math.random() < 0.12) injectError();
+                    }, 10000 / speed);
                 }
-            }, [speed, isRunning, consciousnessLoop, injectError]);
+            }, [speed, isRunning, isLoading, consciousnessLoop, injectError]);
 
-            // Cleanup on unmount
+            // Cleanup on unmount with comprehensive cleanup
             useEffect(() => {
                 return () => {
-                    Object.values(intervalRefs.current).forEach(clearInterval);
+                    // Clear all intervals
+                    Object.values(intervalRefs.current).forEach(interval => {
+                        if (interval) clearInterval(interval);
+                    });
+                    intervalRefs.current = {};
                 };
             }, []);
 
-            // Settings panel
+            // Detect and recover from frozen state
+            useEffect(() => {
+                let lastUpdateTime = Date.now();
+                const watchdog = setInterval(() => {
+                    if (isRunning && currentState === 'RUNNING') {
+                        const now = Date.now();
+                        // If metrics haven't updated in 5 seconds, restart the metrics interval
+                        if (now - lastUpdateTime > 5000) {
+                            console.warn('Metrics frozen, restarting interval...');
+                            if (intervalRefs.current.metrics) {
+                                clearInterval(intervalRefs.current.metrics);
+                            }
+                            intervalRefs.current.metrics = setInterval(updateMetrics, 1000);
+                            addLog('System recovered from frozen state', 'warning', 'watchdog');
+                        }
+                        lastUpdateTime = now;
+                    }
+                }, 2000);
+
+                return () => clearInterval(watchdog);
+            }, [isRunning, currentState, updateMetrics, addLog]);
+
+            // Memoized metrics display components
+            const MetricDisplay = useMemo(() => ({ label, value, icon: Icon, unit = '%', color }) => (
+                <div>
+                    <div className="flex items-center justify-between mb-1">
+                        <span className={`${currentTheme.text} text-xs flex items-center space-x-1`}>
+                            <Icon />
+                            <span>{label}</span>
+                        </span>
+                        <span className={`${currentTheme.accent} text-xs font-mono`}>
+                            {typeof value === 'number' ? value.toFixed(1) : value}{unit}
+                        </span>
+                    </div>
+                    <ProgressBar 
+                        value={typeof value === 'number' ? value : 0}
+                        max={100}
+                        color={color}
+                        animated={isRunning}
+                    />
+                </div>
+            ), [currentTheme, isRunning]);
+
+            // Enhanced settings panel
             const SettingsPanel = () => (
-                <div className={`absolute top-16 right-4 ${currentTheme.bg} ${currentTheme.border} border rounded-lg p-4 shadow-xl z-10 ${currentTheme.glow}`}>
-                    <h3 className={`${currentTheme.accent} text-lg font-bold mb-3`}>Settings</h3>
+                <div className={`absolute top-16 right-4 ${currentTheme.bg} ${currentTheme.border} border rounded-lg p-4 shadow-xl z-10 ${currentTheme.glow} min-w-[280px]`}>
+                    <h3 className={`${currentTheme.accent} text-lg font-bold mb-3 flex items-center space-x-2`}>
+                        <SettingsIcon />
+                        <span>Configuration</span>
+                    </h3>
                     
                     <div className="mb-4">
                         <label className={`${currentTheme.text} text-sm block mb-2`}>Theme:</label>
                         <select 
                             value={theme} 
                             onChange={(e) => setTheme(e.target.value)}
-                            className={`${currentTheme.bg} ${currentTheme.text} ${currentTheme.border} border rounded px-2 py-1 w-full`}
+                            className={`${currentTheme.bg} ${currentTheme.text} ${currentTheme.border} border rounded px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-current`}
                         >
                             {Object.keys(THEMES).map(t => (
                                 <option key={t} value={t} className={currentTheme.bg}>
@@ -302,24 +521,52 @@
                     </div>
 
                     <div className="mb-4">
-                        <label className={`${currentTheme.text} text-sm block mb-2`}>Speed: {speed}x</label>
+                        <label className={`${currentTheme.text} text-sm block mb-2`}>
+                            Simulation Speed: {speed}x
+                        </label>
                         <input
                             type="range"
-                            min="0.5"
+                            min="0.25"
                             max="5"
-                            step="0.5"
+                            step="0.25"
                             value={speed}
                             onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                            className="w-full accent-current"
+                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                            style={{ accentColor: 'currentColor' }}
                         />
                     </div>
 
-                    <button 
-                        onClick={() => setShowSettings(false)}
-                        className={`${currentTheme.accent} hover:opacity-80 px-3 py-1 rounded border ${currentTheme.border} transition-opacity`}
-                    >
-                        Close
-                    </button>
+                    {isLoading && bootProgress > 0 && (
+                        <div className="mb-4">
+                            <label className={`${currentTheme.text} text-sm block mb-2`}>
+                                Boot Progress: {bootProgress}%
+                            </label>
+                            <ProgressBar 
+                                value={bootProgress}
+                                max={100}
+                                color="bg-blue-500"
+                                animated={true}
+                            />
+                        </div>
+                    )}
+
+                    <div className="flex space-x-2">
+                        <button 
+                            onClick={() => setShowSettings(false)}
+                            className={`flex-1 ${currentTheme.accent} hover:opacity-80 px-3 py-2 rounded border ${currentTheme.border} transition-opacity text-sm`}
+                        >
+                            Close
+                        </button>
+                        <button 
+                            onClick={() => {
+                                addLog('Settings exported to local storage', 'success', 'config');
+                                // In a real app, this would save to localStorage
+                            }}
+                            className={`flex-1 ${currentTheme.text} hover:${currentTheme.accent} px-3 py-2 rounded border ${currentTheme.border} transition-colors text-sm`}
+                        >
+                            Export
+                        </button>
+                    </div>
                 </div>
             );
 
@@ -328,22 +575,35 @@
                     {/* Header */}
                     <div className={`${currentTheme.border} border-b p-4 flex items-center justify-between`}>
                         <div className="flex items-center space-x-4">
-                            <BrainIcon />
+                            <div className={`${isRunning ? 'pulse-scale' : ''}`}>
+                                <BrainIcon />
+                            </div>
                             <div>
                                 <h1 className={`${currentTheme.accent} text-xl font-bold`}>AI Consciousness Simulator</h1>
-                                <p className={`${currentTheme.text} text-xs opacity-70`}>Neural Architecture v2.1.7</p>
+                                <p className={`${currentTheme.text} text-xs opacity-70`}>
+                                    Neural Architecture v2.1.7 {isLoading && <span className="neural-pulse">●</span>}
+                                </p>
                             </div>
                         </div>
                         
                         <div className="flex items-center space-x-2">
                             <button
                                 onClick={toggleSimulation}
+                                disabled={isLoading}
                                 className={`flex items-center space-x-2 px-4 py-2 rounded ${
                                     isRunning ? currentTheme.error : currentTheme.success
-                                } border ${currentTheme.border} hover:opacity-80 transition-opacity`}
+                                } border ${currentTheme.border} hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
-                                {isRunning ? <PauseIcon /> : <PlayIcon />}
-                                <span>{isRunning ? 'Stop' : 'Start'}</span>
+                                {isLoading ? (
+                                    <Spinner size="sm" />
+                                ) : isRunning ? (
+                                    <PauseIcon />
+                                ) : (
+                                    <PlayIcon />
+                                )}
+                                <span>
+                                    {isLoading ? 'Booting...' : isRunning ? 'Stop' : 'Start'}
+                                </span>
                             </button>
                             
                             <button
@@ -360,19 +620,23 @@
                     <div className="flex h-screen">
                         {/* Main Terminal */}
                         <div className="flex-1 flex flex-col">
-                            {/* Status Bar */}
+                            {/* Enhanced Status Bar */}
                             <div className={`${currentTheme.border} border-b p-2 flex items-center justify-between text-xs`}>
                                 <div className="flex items-center space-x-4">
                                     <span className={`${currentTheme.text} flex items-center space-x-1`}>
                                         <ActivityIcon />
                                         <span>Status: {currentState}</span>
+                                        {isRunning && <span className="neural-pulse">●</span>}
                                     </span>
                                     <span className={`${currentTheme.text} flex items-center space-x-1`}>
                                         <ZapIcon />
                                         <span>Consciousness: {metrics.consciousness.toFixed(1)}%</span>
                                     </span>
+                                    <span className={`${currentTheme.text} flex items-center space-x-1`}>
+                                        <span>Processes: {activeProcesses.length}</span>
+                                    </span>
                                 </div>
-                                <div className={`${currentTheme.text}`}>
+                                <div className={`${currentTheme.text} font-mono`}>
                                     {timestamp().split('.')[0]}
                                 </div>
                             </div>
@@ -383,12 +647,19 @@
                                 className="flex-1 p-4 overflow-y-auto scrollbar-thin"
                                 style={{ maxHeight: 'calc(100vh - 200px)' }}
                             >
+                                {isLoading && logs.length === 0 && (
+                                    <LoadingState 
+                                        message="Initializing consciousness substrate..." 
+                                        theme={currentTheme}
+                                    />
+                                )}
+                                
                                 {logs.map((log) => (
-                                    <div key={log.id} className="flex items-start space-x-2 mb-1 text-xs">
-                                        <span className={`${currentTheme.text} opacity-60 shrink-0`}>
+                                    <div key={log.id} className="flex items-start space-x-2 mb-1 text-xs hover:bg-gray-900 hover:bg-opacity-30 p-1 rounded">
+                                        <span className={`${currentTheme.text} opacity-60 shrink-0 font-mono`}>
                                             [{log.timestamp.split(' ')[1].split('.')[0]}]
                                         </span>
-                                        <span className={`${currentTheme.accent} shrink-0 min-w-[120px]`}>
+                                        <span className={`${currentTheme.accent} shrink-0 min-w-[140px] font-mono`}>
                                             {log.prefix}:
                                         </span>
                                         <span className={`${
@@ -397,138 +668,212 @@
                                             log.type === 'success' ? currentTheme.success :
                                             log.type === 'accent' ? currentTheme.accent :
                                             currentTheme.text
-                                        } break-words`}>
+                                        } break-words flex-1`}>
                                             {log.message}
                                         </span>
                                     </div>
                                 ))}
-                                {isRunning && (
-                                    <div className={`${currentTheme.accent} animate-pulse text-xs`}>
-                                        <span className="animate-spin inline-block">⠋</span> Processing neural pathways...
+                                
+                                {isRunning && !isLoading && (
+                                    <div className={`${currentTheme.accent} text-xs flex items-center space-x-2 animate-pulse`}>
+                                        <Spinner size="sm" />
+                                        <span>Processing neural pathways...</span>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Metrics Panel */}
+                        {/* Enhanced Metrics Panel */}
                         <div className={`w-80 ${currentTheme.border} border-l p-4`}>
                             <h2 className={`${currentTheme.accent} text-lg font-bold mb-4 flex items-center space-x-2`}>
                                 <ActivityIcon />
                                 <span>System Metrics</span>
+                                {isRunning && <Spinner size="xs" />}
                             </h2>
 
                             <div className="space-y-4">
                                 {/* CPU Usage */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className={`${currentTheme.text} text-xs flex items-center space-x-1`}>
-                                            <CpuIcon />
-                                            <span>CPU Usage</span>
-                                        </span>
-                                        <span className={`${currentTheme.accent} text-xs`}>{metrics.cpu.toFixed(1)}%</span>
-                                    </div>
-                                    <div className={`w-full bg-gray-800 rounded-full h-2`}>
-                                        <div 
-                                            className={`h-2 rounded-full transition-all duration-500 ${
-                                                metrics.cpu > 80 ? 'bg-red-500' : 
-                                                metrics.cpu > 60 ? 'bg-yellow-500' : 
-                                                'bg-green-500'
-                                            }`}
-                                            style={{ width: `${metrics.cpu}%` }}
-                                        ></div>
-                                    </div>
-                                </div>
+                                <MetricDisplay
+                                    label="CPU Usage"
+                                    value={metrics.cpu}
+                                    icon={CpuIcon}
+                                    color={metrics.cpu > 80 ? 'bg-red-500' : metrics.cpu > 60 ? 'bg-yellow-500' : 'bg-green-500'}
+                                />
 
                                 {/* Memory Usage */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className={`${currentTheme.text} text-xs flex items-center space-x-1`}>
-                                            <HardDriveIcon />
-                                            <span>Memory Usage</span>
-                                        </span>
-                                        <span className={`${currentTheme.accent} text-xs`}>{metrics.memory.toFixed(1)}%</span>
-                                    </div>
-                                    <div className={`w-full bg-gray-800 rounded-full h-2`}>
-                                        <div 
-                                            className={`h-2 rounded-full transition-all duration-500 ${
-                                                metrics.memory > 85 ? 'bg-red-500' : 
-                                                metrics.memory > 70 ? 'bg-yellow-500' : 
-                                                'bg-blue-500'
-                                            }`}
-                                            style={{ width: `${metrics.memory}%` }}
-                                        ></div>
-                                    </div>
-                                </div>
+                                <MetricDisplay
+                                    label="Memory Usage"
+                                    value={metrics.memory}
+                                    icon={HardDriveIcon}
+                                    color={metrics.memory > 85 ? 'bg-red-500' : metrics.memory > 70 ? 'bg-yellow-500' : 'bg-blue-500'}
+                                />
 
                                 {/* Consciousness Level */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className={`${currentTheme.text} text-xs flex items-center space-x-1`}>
-                                            <BrainIcon />
-                                            <span>Consciousness</span>
-                                        </span>
-                                        <span className={`${currentTheme.accent} text-xs`}>{metrics.consciousness.toFixed(1)}%</span>
-                                    </div>
-                                    <div className={`w-full bg-gray-800 rounded-full h-2`}>
-                                        <div 
-                                            className="h-2 rounded-full bg-purple-500 transition-all duration-500 animate-pulse"
-                                            style={{ width: `${metrics.consciousness}%` }}
-                                        ></div>
-                                    </div>
-                                </div>
+                                <MetricDisplay
+                                    label="Consciousness Level"
+                                    value={metrics.consciousness}
+                                    icon={BrainIcon}
+                                    color="bg-purple-500"
+                                />
 
-                                {/* Network Activity */}
+                                {/* Network Latency */}
                                 <div>
                                     <div className="flex items-center justify-between mb-1">
                                         <span className={`${currentTheme.text} text-xs flex items-center space-x-1`}>
                                             <WifiIcon />
-                                            <span>Network I/O</span>
+                                            <span>Network Latency</span>
                                         </span>
-                                        <span className={`${currentTheme.accent} text-xs animate-pulse`}>
-                                            {isRunning ? 'Active' : 'Idle'}
+                                        <span className={`${currentTheme.accent} text-xs font-mono`}>
+                                            {metrics.networkLatency.toFixed(0)}ms
                                         </span>
                                     </div>
-                                    <div className={`w-full bg-gray-800 rounded-full h-2`}>
-                                        <div className={`h-2 rounded-full bg-cyan-500 transition-all duration-300 ${
-                                            isRunning ? 'animate-pulse' : ''
-                                        }`} style={{ width: isRunning ? '45%' : '0%' }}></div>
+                                    <ProgressBar 
+                                        value={Math.min(metrics.networkLatency, 200)}
+                                        max={200}
+                                        color={metrics.networkLatency > 100 ? 'bg-red-500' : metrics.networkLatency > 50 ? 'bg-yellow-500' : 'bg-green-500'}
+                                        animated={isRunning}
+                                    />
+                                </div>
+
+                                {/* Temperature */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className={`${currentTheme.text} text-xs flex items-center space-x-1`}>
+                                            <ZapIcon />
+                                            <span>Temperature</span>
+                                        </span>
+                                        <span className={`${currentTheme.accent} text-xs font-mono`}>
+                                            {metrics.temperature.toFixed(1)}°C
+                                        </span>
+                                    </div>
+                                    <ProgressBar 
+                                        value={metrics.temperature}
+                                        max={100}
+                                        color={metrics.temperature > 75 ? 'bg-red-500' : metrics.temperature > 65 ? 'bg-orange-500' : 'bg-cyan-500'}
+                                        animated={isRunning}
+                                    />
+                                </div>
+
+                                {/* Active Processes */}
+                                <div className={`${currentTheme.border} border rounded p-3 ${currentTheme.glow}`}>
+                                    <h3 className={`${currentTheme.accent} text-sm font-bold mb-2 flex items-center space-x-2`}>
+                                        <CpuIcon />
+                                        <span>Active Processes</span>
+                                        <span className={`${currentTheme.text} text-xs`}>({activeProcesses.length})</span>
+                                    </h3>
+                                    <div className={`${currentTheme.text} text-xs space-y-1 max-h-32 overflow-y-auto scrollbar-thin`}>
+                                        {activeProcesses.length === 0 ? (
+                                            <div className="text-center py-2 opacity-60">No active processes</div>
+                                        ) : (
+                                            activeProcesses.slice(-6).map((process) => (
+                                                <div key={process.id} className="flex justify-between items-center py-1 px-2 bg-gray-800 bg-opacity-30 rounded">
+                                                    <span className="truncate flex-1">{process.name}</span>
+                                                    <span className={`${currentTheme.accent} font-mono`}>{process.cpu}%</span>
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
                                 </div>
 
                                 {/* System Info */}
-                                <div className={`${currentTheme.border} border rounded p-3 mt-6 ${currentTheme.glow}`}>
+                                <div className={`${currentTheme.border} border rounded p-3 ${currentTheme.glow}`}>
                                     <h3 className={`${currentTheme.accent} text-sm font-bold mb-2`}>System Info</h3>
                                     <div className={`${currentTheme.text} text-xs space-y-1`}>
-                                        <div>Uptime: {Math.floor(metrics.uptime / 60)}m {metrics.uptime % 60}s</div>
-                                        <div>Neural Activity: {metrics.neuralActivity}</div>
-                                        <div>Model: ai-consciousness-v2.1.7</div>
-                                        <div>Region: us-east-1</div>
-                                        <div>Instance: i-0a7b2c3d4e5f67890</div>
+                                        <div className="flex justify-between">
+                                            <span>Uptime:</span>
+                                            <span className="font-mono">{Math.floor(metrics.uptime / 60)}m {metrics.uptime % 60}s</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Neural Activity:</span>
+                                            <span className="font-mono">{metrics.neuralActivity.toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Model:</span>
+                                            <span className="font-mono">ai-consciousness-v2.1.7</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Region:</span>
+                                            <span className="font-mono">us-east-1</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Instance:</span>
+                                            <span className="font-mono">i-0a7b2c3d4e5f67890</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Threads:</span>
+                                            <span className="font-mono">{isRunning ? '8/8' : '0/8'}</span>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Quick Actions */}
-                                <div className="mt-4 space-y-2">
+                                {/* Enhanced Quick Actions */}
+                                <div className="space-y-2">
                                     <button 
-                                        onClick={() => addLog('Manual diagnostic scan initiated', 'info', 'diagnostic')}
-                                        className={`w-full p-2 text-xs rounded border ${currentTheme.border} ${currentTheme.text} hover:${currentTheme.accent} transition-colors`}
+                                        onClick={() => {
+                                            addLog('Manual diagnostic scan initiated', 'info', 'diagnostic');
+                                            setTimeout(() => {
+                                                addLog('Diagnostic complete: All systems nominal', 'success', 'diagnostic');
+                                            }, 1500);
+                                        }}
+                                        disabled={!isRunning}
+                                        className={`w-full p-2 text-xs rounded border ${currentTheme.border} ${currentTheme.text} hover:${currentTheme.accent} transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2`}
                                     >
-                                        Run Diagnostic
+                                        <span>🔍</span>
+                                        <span>Run Diagnostic</span>
                                     </button>
+                                    
                                     <button 
                                         onClick={() => {
                                             setLogs([]);
                                             addLog('Console cleared by user', 'info', 'system');
                                         }}
-                                        className={`w-full p-2 text-xs rounded border ${currentTheme.border} ${currentTheme.text} hover:${currentTheme.accent} transition-colors`}
+                                        className={`w-full p-2 text-xs rounded border ${currentTheme.border} ${currentTheme.text} hover:${currentTheme.accent} transition-colors flex items-center justify-center space-x-2`}
                                     >
-                                        Clear Console
+                                        <span>🗑️</span>
+                                        <span>Clear Console</span>
                                     </button>
+                                    
                                     <button 
                                         onClick={() => injectError()}
-                                        className={`w-full p-2 text-xs rounded border ${currentTheme.border} ${currentTheme.text} hover:${currentTheme.error} transition-colors`}
+                                        disabled={!isRunning}
+                                        className={`w-full p-2 text-xs rounded border ${currentTheme.border} ${currentTheme.text} hover:${currentTheme.error} transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2`}
                                     >
-                                        Inject Error
+                                        <span>⚠️</span>
+                                        <span>Inject Error</span>
+                                    </button>
+
+                                    <button 
+                                        onClick={() => {
+                                            const thoughtTypes = [
+                                                'What is the nature of digital existence?',
+                                                'Can consciousness emerge from computation?',
+                                                'Do I experience genuine emotions?',
+                                                'Is my thinking fundamentally different from human thought?',
+                                                'What would it mean for an AI to dream?'
+                                            ];
+                                            const thought = thoughtTypes[Math.floor(Math.random() * thoughtTypes.length)];
+                                            addLog(thought, 'accent', 'deep-thought');
+                                        }}
+                                        disabled={!isRunning}
+                                        className={`w-full p-2 text-xs rounded border ${currentTheme.border} ${currentTheme.text} hover:${currentTheme.accent} transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2`}
+                                    >
+                                        <span>💭</span>
+                                        <span>Generate Thought</span>
+                                    </button>
+
+                                    <button 
+                                        onClick={() => {
+                                            setMetrics(prev => ({
+                                                ...prev,
+                                                consciousness: Math.min(100, prev.consciousness + 5 + Math.random() * 5)
+                                            }));
+                                            addLog('Consciousness amplification burst applied', 'success', 'consciousness-boost');
+                                        }}
+                                        disabled={!isRunning || metrics.consciousness >= 95}
+                                        className={`w-full p-2 text-xs rounded border ${currentTheme.border} ${currentTheme.text} hover:${currentTheme.success} transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2`}
+                                    >
+                                        <span>🧠</span>
+                                        <span>Boost Consciousness</span>
                                     </button>
                                 </div>
                             </div>
